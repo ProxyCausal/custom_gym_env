@@ -1,0 +1,43 @@
+<mujoco model="pick_place_custom">
+    <include file="panda.xml"/>
+
+    <visual>
+        <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0" />
+        <rgba haze="0.15 0.25 0.35 1" />
+        <global azimuth="160" elevation="-20" />
+    </visual>
+
+    <asset>
+        <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512"
+            height="3072" />
+        <texture file="textures/light-gray-floor-tile.png" type="2d" name="texplane"/>
+        <material name="floorplane" reflectance="0.01" shininess="0.0" specular="0.0" texrepeat="2 2" texture="texplane" texuniform="true"/>
+        <material name="block_mat" specular="0.5" shininess="0.9" reflectance="0.05" rgba="0.7 0.13 0.11 1"></material>
+    </asset>
+
+    <worldbody>
+        <!camera name="fixed_cam" pos="2 0 2" euler="0 90 0" />
+        <!camera name="fixed_cam" pos="-0.477 -0.343 1.251" xyaxes="0.884 -0.468 -0.000 0.328 0.621 0.712"/>
+
+        <camera name="fixed_cam" pos="-0.522 0.809 0.863" xyaxes="-0.458 -0.889 -0.000 0.375 -0.193 0.907"/>
+
+        <!camera name="fixed_cam" pos="0.157 0.839 0.790" xyaxes="-0.857 -0.516 -0.000 0.216 -0.359 0.908"/>
+
+        <!body name="target" pos="0.3 0 .1" quat="1 0 0 0" mocap="true">
+            <!geom type="box" size=".01 .01 .01" contype="0" conaffinity="0" rgba="1 0 0 0"/>
+            <!site type="sphere" size="0.01" rgba="0 0 1 1" group="1"/>
+        <!/body>
+
+        <light pos="0 0 3.5" dir="0 0 -1" directional="true" />
+        <!geom name="floor" size="0 0 0.05" pos="0 0 0" type="plane" rgba="0.1 0.1 0.1 1" />
+        <geom name="floor" material="floorplane" size="0 0 0.05" pos="0 0 0" type="plane" />
+
+        <!-- Pickable box -->
+    	<body name="box" pos="0.5 0.0 0.05">
+            <joint name="object_joint0" type="free" limited="false"></joint>
+			<! geom density="50000" condim="4" solimp="1 1 1" solref="0.02 1"><!/geom>
+            <geom name='box' size="0.03 0.02 0.03" type="box" mass="0.1" friction="1.0 0.005 0.0001" material="block_mat" />
+			<site name="object_site" pos="0 0 0" size="0.005 0.005 0.005" rgba="1 0 0 0" type="box"></site>
+    	</body>
+    </worldbody>
+</mujoco>

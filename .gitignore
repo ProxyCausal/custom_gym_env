@@ -1,1 +1,6 @@
-robots/
+robots/franka_emika_panda/assets
+robots/franka_emika_panda/textures
+*.npz
+*.png
+__pycache__/
+.ipynb_checkpoints/

@@ -7,6 +7,8 @@ import pygame
 from pynput import keyboard
 from PIL import Image
 
+from scipy.spatial.transform import Rotation as R
+
 # Integration timestep in seconds. This corresponds to the amount of time the joint
 # velocities will be integrated for to obtain the desired joint positions.
 integration_dt: float = 0.1
@@ -59,7 +61,7 @@ def main() -> None:
     joystick.init()
     print(f"🎮 Detected controller: {joystick.get_name()}")
 
-    robot_path = "C:/Users/gdev/Documents/CS/DL/projects/Robotics/mjctrl/franka_emika_panda/pick_place_custom.xml"
+    robot_path = "C:/Users/gdev/Documents/CS/DL/projects/Robotics/custom_gym_env/robots/franka_emika_panda/pick_place_custom.xml"
     #robot_path = "C:/Users/gdev/Documents/CS/DL/projects/Robotics/mujoco-3.3.3-windows-x86_64/model/SO101/pick_place_custom.xml"
 
     # Load the model and data.
@@ -117,7 +119,7 @@ def main() -> None:
         "reset": False
     }
     # Create a renderer once (reused on each capture)
-    renderer = mujoco.Renderer(model, height=480, width=640)
+    renderer = mujoco.Renderer(model, width=640, height=480)
     # Choose the camera you want to capture from
     cam_id = model.camera("fixed_cam").id    # or 0, 1, etc.
 
@@ -152,8 +154,17 @@ def main() -> None:
                 renderer.update_scene(data, camera=cam_id)
                 rgb = renderer.render()
 
+                Rmat = data.site(site_id).xmat.reshape(3, 3)
+                # Convert to Euler angles
+                site_euler = R.from_matrix(Rmat).as_euler("xyz", degrees=True)
+
                 # Save the image
-                Image.fromarray(rgb).save(f"outputs/capture_{time.time()}.png")
+                np.savez(
+                    f"outputs/capture_{time.time()}.npz",
+                    img = rgb,
+                    state = np.concat([data.site(site_id).xpos.copy(), site_euler, np.array([data.qpos[7]])])
+                )
+                #Image.fromarray(rgb).save(f"outputs/capture_{time.time()}.png")
 
                 print("Picture saved")
 
