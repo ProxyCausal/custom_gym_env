@@ -26,7 +26,7 @@ Kn = np.asarray([10.0, 10.0, 10.0, 10.0, 5.0, 5.0, 5.0])
 # Maximum allowable joint velocity in rad/s.
 max_angvel = 0.785
 
-def diffik_nullspace(model, data, dx, error_quat = np.zeros(4)):
+def diffik_nullspace(model, data, target_pos, error_quat = np.zeros(4)):
     #ignore error_quat for now
 
     joint_names = ["joint1","joint2","joint3","joint4","joint5","joint6", "joint7"]
@@ -42,6 +42,8 @@ def diffik_nullspace(model, data, dx, error_quat = np.zeros(4)):
     diag = damping * np.eye(6)
     eye = np.eye(len(dof_ids))
     twist = np.zeros(6)
+
+    dx = target_pos - data.site(site_id).xpos
 
     twist[:3] = Kpos * dx / integration_dt
     mujoco.mju_quat2Vel(twist[3:], error_quat, 1.0)
@@ -63,11 +65,6 @@ def diffik_nullspace(model, data, dx, error_quat = np.zeros(4)):
     if dq_abs_max > max_angvel:
         dq *= max_angvel / dq_abs_max
 
-    # Integrate joint velocities to obtain joint positions.
-    q = data.qpos.copy()  # Note the copy here is important.
     dq = np.pad(dq, (0, model.nv - len(dof_ids)), mode='constant')
-    mujoco.mj_integratePos(model, q, dq, integration_dt)
 
-    np.clip(q[dof_ids], *model.jnt_range.T[:,:len(dof_ids)], out=q[dof_ids])
-
-    return q[:8] 
+    return dq
