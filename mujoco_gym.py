@@ -93,6 +93,7 @@ class PickPlacePandaEnvController(MujocoEnv):
         xml_file: str = "scene.xml",
         frame_skip: int = 5, #shouldn't be relevant since we're not going to be controlling the timesteps manually and not via do_simulation
         default_camera_config: dict[str, float | int] = None, #DEFAULT_CAMERA_CONFIG
+        initial_pose = 'home',
         **kwargs
     ):
         observation_space = spaces.Tuple((
@@ -118,9 +119,10 @@ class PickPlacePandaEnvController(MujocoEnv):
         self.actuator_ids = np.array([self.model.actuator(f'actuator{i}').id for i in range(1,len(joint_names)+1)])
 
         self.controller = 'osc'
+        self.inital_pose = initial_pose
 
     def reset_model(self):
-        key_id = self.model.key('home').id
+        key_id = self.model.key(self.inital_pose).id
 
         mujoco.mj_resetDataKeyframe(self.model, self.data, key_id)
 
@@ -145,7 +147,7 @@ class PickPlacePandaEnvController(MujocoEnv):
     def step(self, action):
         delta_xyz = action[0:3]
         delta_ori = action[3:6]
-        gripper_state = action[6]
+        gripper_state = action[6] #seems to be b/w 0-1 from DROID dataset
         
         #technically need to convert extrinsic Euler angles rel to base deltas into quarternion deltas
         #but gpt says it's ok if the deltas are small
@@ -178,7 +180,7 @@ class PickPlacePandaEnvController(MujocoEnv):
                 np.clip(q[self.dof_ids], *self.model.jnt_range.T[:,:len(self.dof_ids)], out=q[self.dof_ids])
                 # Set the control signal and step the simulation.
                 self.data.ctrl[self.actuator_ids] = q[self.dof_ids]
-                
+
             elif (self.controller == 'osc'):
                 tau = osc(self.model, self.data, desired_ee_pos)
                 self.data.ctrl[self.actuator_ids] = tau[self.actuator_ids]
