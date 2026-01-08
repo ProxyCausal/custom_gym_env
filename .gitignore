@@ -2,5 +2,6 @@ robots/franka_emika_panda/assets
 robots/franka_emika_panda/textures
 *.npz
 *.png
+*.mp4
 __pycache__/
 .ipynb_checkpoints/

@@ -143,26 +143,42 @@ class PickPlacePandaEnvController(MujocoEnv):
         return self.data.site(self.ee_site_id).xpos.copy(), site_euler, np.array([self.data.qpos[7]])
 
     def step(self, action):
-        integration_dt: float = 0.1
+        delta_xyz = action[0:3]
+        delta_ori = action[3:6]
+        gripper_state = action[6]
+        
+        #technically need to convert extrinsic Euler angles rel to base deltas into quarternion deltas
+        #but gpt says it's ok if the deltas are small
+        
+        #delta = diff b/w desired - current pos = actions = errors for xyz, but not angles?
+        
+        #action is ctrl- for gripper state this != joint angles
 
         current_ee_pos = self.data.site(self.ee_site_id).xpos.copy()
-        desired_ee_pos = current_ee_pos + action
+        desired_ee_pos = current_ee_pos + delta_xyz
 
         #controller- should really create another class
         #adds up dq until target is achieved
         iters = 0
+        max_steps = 1000
         print("Received action, controller is trying to achieve target position")
-        while np.linalg.norm(current_ee_pos - desired_ee_pos, 2) > .01:
+        while np.linalg.norm(current_ee_pos - desired_ee_pos, 2) > .001: #.01
+            if (iters > max_steps):
+                print(f"Controllers ran {max_steps}, moving on to next action")
+                break
+
             if (iters % 100) == 0:
                 print(f"Controller error: {current_ee_pos - desired_ee_pos}, l2 dist: {np.linalg.norm(current_ee_pos - desired_ee_pos, 2)}")
             
             if (self.controller == 'diffik'):
+                integration_dt: float = 0.1
                 dq = diffik_nullspace(self.model, self.data, desired_ee_pos)
                 q = self.data.qpos.copy()  # Note the copy here is important.
                 mujoco.mj_integratePos(self.model, q, dq, integration_dt)
                 np.clip(q[self.dof_ids], *self.model.jnt_range.T[:,:len(self.dof_ids)], out=q[self.dof_ids])
                 # Set the control signal and step the simulation.
                 self.data.ctrl[self.actuator_ids] = q[self.dof_ids]
+                
             elif (self.controller == 'osc'):
                 tau = osc(self.model, self.data, desired_ee_pos)
                 self.data.ctrl[self.actuator_ids] = tau[self.actuator_ids]
@@ -172,6 +188,10 @@ class PickPlacePandaEnvController(MujocoEnv):
             current_ee_pos = self.data.site(self.ee_site_id).xpos.copy()
 
             iters += 1
+
+        gripper_ctrlrange = self.model.actuator_ctrlrange[-1,:]
+        gripper_unscaled = (gripper_ctrlrange[1] - gripper_ctrlrange[0]) * gripper_state + gripper_ctrlrange[0]
+        self.data.ctrl[self.model.actuator('actuator8').id] = gripper_unscaled
 
         observation = self._get_obs()
         reward = 0
