@@ -36,7 +36,7 @@
     	<body name="box" pos="0.5 0.0 0.05">
             <joint name="object_joint0" type="free" limited="false"></joint>
 			<! geom density="50000" condim="4" solimp="1 1 1" solref="0.02 1"><!/geom>
-            <geom name='box' size="0.03 0.02 0.03" type="box" mass="0.1" friction="1.0 0.005 0.0001" material="block_mat" />
+            <geom name='box' size="0.03 0.03 0.03" type="box" mass="0.1" friction="1.0 0.005 0.0001" material="block_mat" />
 			<site name="object_site" pos="0 0 0" size="0.005 0.005 0.005" rgba="1 0 0 0" type="box"></site>
     	</body>
     </worldbody>

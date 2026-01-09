@@ -185,6 +185,7 @@ class PickPlacePandaEnvController(MujocoEnv):
                 tau = osc(self.model, self.data, desired_ee_pos)
                 self.data.ctrl[self.actuator_ids] = tau[self.actuator_ids]
 
+            #sim only advances during controller loop, so it's not running during long inference times
             mujoco.mj_step(self.model, self.data)
 
             current_ee_pos = self.data.site(self.ee_site_id).xpos.copy()
