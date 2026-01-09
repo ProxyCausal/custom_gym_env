@@ -147,7 +147,7 @@ class PickPlacePandaEnvController(MujocoEnv):
     def step(self, action):
         delta_xyz = action[0:3]
         delta_ori = action[3:6]
-        gripper_state = action[6] #seems to be b/w 0-1 from DROID dataset
+        gripper_state = action[6] #seems to be b/w 0-1 measuring how CLOSED the gripper is (DROID dataset)
         
         #technically need to convert extrinsic Euler angles rel to base deltas into quarternion deltas
         #but gpt says it's ok if the deltas are small
@@ -192,7 +192,8 @@ class PickPlacePandaEnvController(MujocoEnv):
             iters += 1
 
         gripper_ctrlrange = self.model.actuator_ctrlrange[-1,:]
-        gripper_unscaled = (gripper_ctrlrange[1] - gripper_ctrlrange[0]) * gripper_state + gripper_ctrlrange[0]
+        #zero force (closed) when gripper_state = 1
+        gripper_unscaled = (gripper_ctrlrange[1] - gripper_ctrlrange[0]) * (1-gripper_state) + gripper_ctrlrange[0]
         self.data.ctrl[self.model.actuator('actuator8').id] = gripper_unscaled
 
         observation = self._get_obs()
