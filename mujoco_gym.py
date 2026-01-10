@@ -142,7 +142,10 @@ class PickPlacePandaEnvController(MujocoEnv):
         # Convert to Euler angles
         site_euler = R.from_matrix(Rmat).as_euler("xyz", degrees=True)
 
-        return self.data.site(self.ee_site_id).xpos.copy(), site_euler, np.array([self.data.qpos[7]])
+        #.04 fully open = 0
+        gripper_pos_normalized = 1 - self.data.qpos.copy()[7] / .04
+
+        return self.data.site(self.ee_site_id).xpos.copy(), site_euler, np.array([gripper_pos_normalized])
 
     def step(self, action):
         delta_xyz = action[0:3]
