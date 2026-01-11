@@ -99,7 +99,7 @@ class PickPlacePandaEnvController(MujocoEnv):
         observation_space = spaces.Tuple((
             spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),   # ee_pos
             spaces.Box(low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32),   # ee_euler
-            spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)  # gripper qpos
+            spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)  # normalized gripper state
         ))
 
         MujocoEnv.__init__(
@@ -119,10 +119,17 @@ class PickPlacePandaEnvController(MujocoEnv):
         self.actuator_ids = np.array([self.model.actuator(f'actuator{i}').id for i in range(1,len(joint_names)+1)])
 
         self.controller = 'osc'
-        self.inital_pose = initial_pose
+        self.initial_pose = initial_pose
+        fps = 30
+        self.steps_per_frame = int(1 / (fps * self.model.opt.timestep))
+        self.current_timestep = 0
+        self.frames = []
 
     def reset_model(self):
-        key_id = self.model.key(self.inital_pose).id
+        #maybe should be in reset instead
+        self.current_timestep = 0
+
+        key_id = self.model.key(self.initial_pose).id
 
         mujoco.mj_resetDataKeyframe(self.model, self.data, key_id)
 
@@ -131,7 +138,9 @@ class PickPlacePandaEnvController(MujocoEnv):
         return self._get_obs()
 
     def _set_action_space(self):
-        self.action_space = spaces.Box(low=-np.inf, high=np.inf, dtype=np.float32)
+        self.action_space = spaces.Box(
+            low=np.array([-np.inf]*6 + [-1]),
+            high=np.array([np.inf]*6 + [1]), dtype=np.float32)
         return self.action_space
     
     def _get_obs(self):
@@ -150,7 +159,7 @@ class PickPlacePandaEnvController(MujocoEnv):
     def step(self, action):
         delta_xyz = action[0:3]
         delta_ori = action[3:6]
-        gripper_state = action[6] #seems to be b/w 0-1 measuring how CLOSED the gripper is (DROID dataset)
+        gripper_delta = action[6]
         
         #technically need to convert extrinsic Euler angles rel to base deltas into quarternion deltas
         #but gpt says it's ok if the deltas are small
@@ -158,6 +167,8 @@ class PickPlacePandaEnvController(MujocoEnv):
         #delta = diff b/w desired - current pos = actions = errors for xyz, but not angles?
         
         #action is ctrl- for gripper state this != joint angles
+        #seems to be b/w 0-1 measuring how CLOSED the gripper is (DROID dataset)
+        #but the actions are differentials even for gripper state
 
         current_ee_pos = self.data.site(self.ee_site_id).xpos.copy()
         desired_ee_pos = current_ee_pos + delta_xyz
@@ -174,6 +185,10 @@ class PickPlacePandaEnvController(MujocoEnv):
 
             if (iters % 100) == 0:
                 print(f"Controller error: {current_ee_pos - desired_ee_pos}, l2 dist: {np.linalg.norm(current_ee_pos - desired_ee_pos, 2)}")
+
+            if (self.current_timestep % self.steps_per_frame) == 0:
+                frame = self.render()
+                self.frames.append(frame)
             
             if (self.controller == 'diffik'):
                 integration_dt: float = 0.1
@@ -194,11 +209,20 @@ class PickPlacePandaEnvController(MujocoEnv):
             current_ee_pos = self.data.site(self.ee_site_id).xpos.copy()
 
             iters += 1
+            self.current_timestep += 1
 
         gripper_ctrlrange = self.model.actuator_ctrlrange[-1,:]
         #zero force (closed) when gripper_state = 1
-        gripper_unscaled = (gripper_ctrlrange[1] - gripper_ctrlrange[0]) * (1-gripper_state) + gripper_ctrlrange[0]
-        self.data.ctrl[self.model.actuator('actuator8').id] = gripper_unscaled
+        # a_grip ∈ [-1, 1]
+        # +a_grip = close, -a_grip = open
+        gripper_unscaled = (gripper_ctrlrange[1] - gripper_ctrlrange[0]) * gripper_delta + gripper_ctrlrange[0]
+        gripper_state = self.data.ctrl.copy()[self.model.actuator('actuator8').id] + gripper_unscaled
+        
+        self.data.ctrl[self.model.actuator('actuator8').id] = np.clip(gripper_state, *gripper_ctrlrange)
+
+        #update simulation so that grip is updated in the same action step
+        mujoco.mj_step(self.model, self.data)
+        self.current_timestep += 1
 
         observation = self._get_obs()
         reward = 0
