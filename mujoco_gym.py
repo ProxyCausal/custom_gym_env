@@ -133,6 +133,9 @@ class PickPlacePandaEnvController(MujocoEnv):
 
         mujoco.mj_resetDataKeyframe(self.model, self.data, key_id)
 
+        #set gripper to open by default
+        self.data.ctrl[self.model.actuator('actuator8').id] = self.model.actuator_ctrlrange[-1,:][1]
+
         mujoco.mj_forward(self.model, self.data)
 
         return self._get_obs()
@@ -152,9 +155,9 @@ class PickPlacePandaEnvController(MujocoEnv):
         site_euler = R.from_matrix(Rmat).as_euler("xyz", degrees=True)
 
         #.04 fully open = 0
-        gripper_pos_normalized = 1 - self.data.qpos.copy()[7] / .04
+        gripper_state = 1 - self.data.qpos.copy()[7] / .04
 
-        return self.data.site(self.ee_site_id).xpos.copy(), site_euler, np.array([gripper_pos_normalized])
+        return self.data.site(self.ee_site_id).xpos.copy(), site_euler, np.array([gripper_state])
 
     def step(self, action):
         delta_xyz = action[0:3]
@@ -172,6 +175,18 @@ class PickPlacePandaEnvController(MujocoEnv):
 
         current_ee_pos = self.data.site(self.ee_site_id).xpos.copy()
         desired_ee_pos = current_ee_pos + delta_xyz
+
+        #assumes the mj_steps from cartesian will be enough
+        #and actuates simultaneously rather than one before the other
+        #better to do a seperate check for gripper convergence
+        gripper_ctrlrange = self.model.actuator_ctrlrange[-1,:]
+        #zero force (closed) when gripper_state = 1
+        # a_grip ∈ [-1, 1]
+        # +a_grip = close, -a_grip = open
+        gripper_delta_ctrl = (gripper_ctrlrange[1] - gripper_ctrlrange[0]) * -gripper_delta + gripper_ctrlrange[0]
+        gripper_ctrl = self.data.ctrl.copy()[self.model.actuator('actuator8').id] + gripper_delta_ctrl
+        
+        self.data.ctrl[self.model.actuator('actuator8').id] = np.clip(gripper_ctrl, *gripper_ctrlrange)
 
         #controller- should really create another class
         #adds up dq until target is achieved
@@ -210,19 +225,6 @@ class PickPlacePandaEnvController(MujocoEnv):
 
             iters += 1
             self.current_timestep += 1
-
-        gripper_ctrlrange = self.model.actuator_ctrlrange[-1,:]
-        #zero force (closed) when gripper_state = 1
-        # a_grip ∈ [-1, 1]
-        # +a_grip = close, -a_grip = open
-        gripper_unscaled = (gripper_ctrlrange[1] - gripper_ctrlrange[0]) * gripper_delta + gripper_ctrlrange[0]
-        gripper_state = self.data.ctrl.copy()[self.model.actuator('actuator8').id] + gripper_unscaled
-        
-        self.data.ctrl[self.model.actuator('actuator8').id] = np.clip(gripper_state, *gripper_ctrlrange)
-
-        #update simulation so that grip is updated in the same action step
-        mujoco.mj_step(self.model, self.data)
-        self.current_timestep += 1
 
         observation = self._get_obs()
         reward = 0
