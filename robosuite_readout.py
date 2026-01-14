@@ -5,6 +5,7 @@ from robosuite.controllers import load_composite_controller_config
 env = robosuite.make(
     env_name="Lift",
     robots="Panda",
+    gripper_types="Robotiq85Gripper",
     controller_configs=load_composite_controller_config(robot='Panda'),
     has_renderer=False,
     has_offscreen_renderer=False,
@@ -15,7 +16,7 @@ env = robosuite.make(
 model = env.sim.model._model  # low-level mujoco.MjModel
 
 # Dump the fully resolved XML
-#mujoco.mj_saveLastXML("outputs/robosuite_final.xml", model)
+mujoco.mj_saveLastXML("outputs/robosuite_final_Robotiq85Gripper.xml", model)
 
 print(model.opt.timestep)
 print(model.opt.integrator)
