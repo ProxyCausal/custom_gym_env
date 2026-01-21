@@ -132,11 +132,15 @@ class PickPlacePandaEnvController(MujocoEnv):
         key_id = self.model.key(self.initial_pose).id
 
         mujoco.mj_resetDataKeyframe(self.model, self.data, key_id)
-
-        #set gripper to open by default
-        self.data.ctrl[self.model.actuator('actuator8').id] = self.model.actuator_ctrlrange[-1,:][1]
-
         mujoco.mj_forward(self.model, self.data)
+
+        pL = self.data.site_xpos[self.model.site("left_tip").id]
+        pR = self.data.site_xpos[self.model.site("right_tip").id]
+
+        #gripper opening width when fully open
+        self.gripper_max = np.linalg.norm(pL - pR, 2)
+        #gripper opening width when fully closed
+        self.gripper_min = .0035 #have to edit if change site locations
 
         return self._get_obs()
 
@@ -154,8 +158,13 @@ class PickPlacePandaEnvController(MujocoEnv):
         # Convert to Euler angles
         site_euler = R.from_matrix(Rmat).as_euler("xyz", degrees=True)
 
-        #.04 fully open = 0
-        gripper_state = 1 - self.data.qpos.copy()[7] / .04
+        pL = self.data.site_xpos[self.model.site("left_tip").id]
+        pR = self.data.site_xpos[self.model.site("right_tip").id]
+
+        #fully open = 0, np.linalg.norm(pL - pR, 2) = gripper_max
+        #fully closed = 1, np.linalg.norm(pL - pR, 2) = gripper_min
+        gripper_state = 1 - (np.linalg.norm(pL - pR, 2) - self.gripper_min) / (self.gripper_max - self.gripper_min)
+        gripper_state = np.clip(gripper_state, 0, 1)
 
         return self.data.site(self.ee_site_id).xpos.copy(), site_euler, np.array([gripper_state])
 
@@ -180,13 +189,13 @@ class PickPlacePandaEnvController(MujocoEnv):
         #and actuates simultaneously rather than one before the other
         #better to do a seperate check for gripper convergence
         gripper_ctrlrange = self.model.actuator_ctrlrange[-1,:]
-        #zero force (closed) when gripper_state = 1
+        #255 = max close, 0 = max open
         # a_grip ∈ [-1, 1]
         # +a_grip = close, -a_grip = open
-        gripper_delta_ctrl = (gripper_ctrlrange[1] - gripper_ctrlrange[0]) * -gripper_delta + gripper_ctrlrange[0]
-        gripper_ctrl = self.data.ctrl.copy()[self.model.actuator('actuator8').id] + gripper_delta_ctrl
+        gripper_delta_ctrl = (gripper_ctrlrange[1] - gripper_ctrlrange[0]) * gripper_delta + gripper_ctrlrange[0]
+        gripper_ctrl = self.data.ctrl.copy()[self.model.actuator('fingers_actuator').id] + gripper_delta_ctrl
         
-        self.data.ctrl[self.model.actuator('actuator8').id] = np.clip(gripper_ctrl, *gripper_ctrlrange)
+        self.data.ctrl[self.model.actuator('fingers_actuator').id] = np.clip(gripper_ctrl, *gripper_ctrlrange)
 
         #controller- should really create another class
         #adds up dq until target is achieved

@@ -73,7 +73,6 @@ def main() -> None:
     model.opt.timestep = dt
 
     # End-effector site we wish to control.
-    #site_name = "gripperframe"
     site_name = "attachment_site"
     site_id = model.site(site_name).id
 
@@ -86,10 +85,6 @@ def main() -> None:
 
     print(dof_ids)
     print(actuator_ids)
-
-    gripper_joint_name = "finger_joint1" #"actuator8"
-    gripper_joint_id = model.joint(gripper_joint_name).id
-    gripper_qpos_addr = model.jnt_qposadr[gripper_joint_id]
 
     wroll_joint_id = model.joint("joint7").id
     wroll_qpos_addr = model.jnt_qposadr[wroll_joint_id]
