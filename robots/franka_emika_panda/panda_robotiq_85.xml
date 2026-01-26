@@ -257,8 +257,9 @@
                     <geom mesh="link7_6" material="black" class="visual"/>
                     <geom mesh="link7_7" material="white" class="visual"/>
                     <geom mesh="link7_c" class="collision"/>
-                    <body name="base_mount" pos="0 0 0.107" quat="0.9238795 0 0 -0.3826834" childclass="2f85">
-                      <site name="attachment_site" rgba="1 0 0 1" size="0.01" group="1" quat="0 0 0 1"/>
+                    <body name="base_mount" pos="0 0 0.107" quat="1 0 0 0" childclass="2f85">
+                      <!-- attachment_site was "0 0 0 1" for mjctrl and Mujoco is w x y z, not sure why but may need to adjust back-->
+                      <site name="attachment_site" rgba="1 0 0 1" size="0.01" group="1" quat="1 0 0 0"/>
                       <geom class="visual_2f85" mesh="base_mount" material="black_2f85"/>
                       <geom class="collision_2f85" mesh="base_mount"/>
                       <body name="base" pos="0 0 0.0038" quat="1 0 0 -1">
@@ -405,7 +406,7 @@
   </actuator>
 
   <keyframe>
-    <key name="home" qpos="0 0 0 -1.57079 0 1.57079 -0.7853 0.0110307 0.000154522 0.011242 -0.0111145 0.0112366 -0.0199998 -0.0060562 0.0392324 0.5 0.0 .05 1 0 0 0" ctrl="0 0 0 -1.57079 0 1.57079 -0.7853 0"/>
-    <key name="near_box" qpos="0.000689396 0.243749 0.00048068 -1.99469 -0.000436879 2.22238 -0.78398 0.0110307 0.000154522 0.011242 -0.0111145 0.0112366 -0.0199998 -0.0060562 0.0392324 0.5 0.0 .05 1 0 0 0" ctrl="0.000689396 0.235696 0.000546948 -1.98863 -0.000173983 2.22352 -0.78398 0"/>
+    <key name="home" qpos="0 0 0 -1.57079 0 1.57079 0 0.0110307 0.000154522 0.011242 -0.0111145 0.0112366 -0.0199998 -0.0060562 0.0392324 0.5 0.0 .05 1 0 0 0" ctrl="0 0 0 -1.57079 0 1.57079 0 0"/>
+    <key name="near_box" qpos="0.000689396 0.243749 0.00048068 -1.99469 -0.000436879 2.22238 0 0.0110307 0.000154522 0.011242 -0.0111145 0.0112366 -0.0199998 -0.0060562 0.0392324 0.5 0.0 .05 1 0 0 0" ctrl="0.000689396 0.235696 0.000546948 -1.98863 -0.000173983 2.22352 0 0"/>
   </keyframe>
 </mujoco>

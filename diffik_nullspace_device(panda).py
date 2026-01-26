@@ -132,6 +132,13 @@ def main() -> None:
 
         mujoco.mj_forward(model, data)
 
+        pL = data.site_xpos[model.site("left_tip").id]
+        pR = data.site_xpos[model.site("right_tip").id]
+        #gripper opening width when fully open
+        gripper_max = np.linalg.norm(pL - pR, 2)
+        #gripper opening width when fully closed
+        gripper_min = .0035 #have to edit if change site locations
+
         target_pos = data.site(site_id).xpos.copy()
         target_quat = np.zeros(4)
         mujoco.mju_mat2Quat(target_quat, data.site(site_id).xmat)
@@ -149,15 +156,22 @@ def main() -> None:
                 renderer.update_scene(data, camera=cam_id)
                 rgb = renderer.render()
 
+                ### should be same as _get_obs in gym environment
                 Rmat = data.site(site_id).xmat.reshape(3, 3)
                 # Convert to Euler angles
                 site_euler = R.from_matrix(Rmat).as_euler("xyz", degrees=True)
+
+                #fully open = 0, np.linalg.norm(pL - pR, 2) = gripper_max
+                #fully closed = 1, np.linalg.norm(pL - pR, 2) = gripper_min
+                gripper_state = 1 - (np.linalg.norm(pL - pR, 2) - gripper_min) / (gripper_max - gripper_min)
+                gripper_state = np.clip(gripper_state, 0, 1)
+                ###
 
                 # Save the image
                 np.savez(
                     f"outputs/capture_{time.time()}.npz",
                     img = rgb,
-                    state = np.concat([data.site(site_id).xpos.copy(), site_euler, np.array([data.qpos[7]])])
+                    state = np.concat([data.site(site_id).xpos.copy(), site_euler, np.array([gripper_state])])
                 )
                 #Image.fromarray(rgb).save(f"outputs/capture_{time.time()}.png")
 
