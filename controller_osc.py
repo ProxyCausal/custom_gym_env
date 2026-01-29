@@ -30,7 +30,7 @@ gravity_compensation: bool = True
 dt: float = 0.002
 
 
-def osc(model, data, target_pos, error_quat = np.zeros(4)):
+def osc(model, data, target_pos, q0_key='home'):
     # Compute damping and stiffness matrices.
     damping_pos = damping_ratio * 2 * np.sqrt(impedance_pos)
     damping_ori = damping_ratio * 2 * np.sqrt(impedance_ori)
@@ -44,7 +44,7 @@ def osc(model, data, target_pos, error_quat = np.zeros(4)):
     site_name = "attachment_site"
     site_id = model.site(site_name).id
 
-    q0 = model.key("home").qpos[dof_ids]
+    q0 = model.key(q0_key).qpos[dof_ids]
 
     # Pre-allocate numpy arrays.
     jac_full = np.zeros((6, model.nv))
@@ -60,6 +60,7 @@ def osc(model, data, target_pos, error_quat = np.zeros(4)):
     twist[:3] = Kpos * dx / integration_dt
     mujoco.mju_mat2Quat(site_quat, data.site(site_id).xmat)
     mujoco.mju_negQuat(site_quat_conj, site_quat)
+    error_quat = np.array([1,0,0,0]) #ignore orientation
     #mujoco.mju_mulQuat(error_quat, data.mocap_quat[mocap_id], site_quat_conj)
     mujoco.mju_quat2Vel(twist[3:], error_quat, 1.0)
     twist[3:] *= Kori / integration_dt

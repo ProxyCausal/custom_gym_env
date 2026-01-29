@@ -92,7 +92,7 @@ def main() -> None:
     wroll_max = model.jnt_range[wroll_joint_id][1]
 
     # Initial joint configuration saved as a keyframe in the XML file.
-    key_name = "home"
+    key_name = "home_g90"
     key_id = model.key(key_name).id
     q0 = model.key(key_name).qpos[dof_ids]
 

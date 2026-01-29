@@ -224,7 +224,7 @@ class PickPlacePandaEnvController(MujocoEnv):
                 self.data.ctrl[self.actuator_ids] = q[self.dof_ids]
 
             elif (self.controller == 'osc'):
-                tau = osc(self.model, self.data, desired_ee_pos)
+                tau = osc(self.model, self.data, desired_ee_pos, 'home_g90')
                 self.data.ctrl[self.actuator_ids] = tau[self.actuator_ids]
 
             #sim only advances during controller loop, so it's not running during long inference times
