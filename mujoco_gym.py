@@ -94,6 +94,7 @@ class PickPlacePandaEnvController(MujocoEnv):
         frame_skip: int = 5, #shouldn't be relevant since we're not going to be controlling the timesteps manually and not via do_simulation
         default_camera_config: dict[str, float | int] = None, #DEFAULT_CAMERA_CONFIG
         initial_pose = 'home',
+        control_freq = 20,
         **kwargs
     ):
         observation_space = spaces.Tuple((
@@ -120,6 +121,7 @@ class PickPlacePandaEnvController(MujocoEnv):
 
         self.controller = 'osc'
         self.initial_pose = initial_pose
+        self.control_timestep = 1 / control_freq
         fps = 30
         self.steps_per_frame = int(1 / (fps * self.model.opt.timestep))
         self.current_timestep = 0
@@ -185,6 +187,8 @@ class PickPlacePandaEnvController(MujocoEnv):
         current_ee_pos = self.data.site(self.ee_site_id).xpos.copy()
         desired_ee_pos = current_ee_pos + delta_xyz
 
+        print("Desired ee pos:", desired_ee_pos)
+
         #assumes the mj_steps from cartesian will be enough
         #and actuates simultaneously rather than one before the other
         #better to do a seperate check for gripper convergence
@@ -199,31 +203,13 @@ class PickPlacePandaEnvController(MujocoEnv):
 
         #controller- should really create another class
         #adds up dq until target is achieved
-        iters = 0
-        max_steps = 1000
-        print("Received action, controller is trying to achieve target position")
-        while np.linalg.norm(current_ee_pos - desired_ee_pos, 2) > .001: #.01
-            if (iters > max_steps):
-                print(f"Controllers ran {max_steps}, moving on to next action")
-                break
-
-            if (iters % 100) == 0:
-                print(f"Controller error: {current_ee_pos - desired_ee_pos}, l2 dist: {np.linalg.norm(current_ee_pos - desired_ee_pos, 2)}")
-
-            if (self.current_timestep % self.steps_per_frame) == 0:
+        #print("desired ee_pos", int(self.control_timestep / self.model.opt.timestep))
+        for i in range(int(self.control_timestep / self.model.opt.timestep)):
+            if (i % self.steps_per_frame) == 0:
                 frame = self.render()
                 self.frames.append(frame)
-            
-            if (self.controller == 'diffik'):
-                integration_dt: float = 0.1
-                dq = diffik_nullspace(self.model, self.data, desired_ee_pos)
-                q = self.data.qpos.copy()  # Note the copy here is important.
-                mujoco.mj_integratePos(self.model, q, dq, integration_dt)
-                np.clip(q[self.dof_ids], *self.model.jnt_range.T[:,:len(self.dof_ids)], out=q[self.dof_ids])
-                # Set the control signal and step the simulation.
-                self.data.ctrl[self.actuator_ids] = q[self.dof_ids]
 
-            elif (self.controller == 'osc'):
+            if (self.controller == 'osc'):
                 tau = osc(self.model, self.data, desired_ee_pos, 'home')
                 self.data.ctrl[self.actuator_ids] = tau[self.actuator_ids]
 
@@ -231,9 +217,6 @@ class PickPlacePandaEnvController(MujocoEnv):
             mujoco.mj_step(self.model, self.data)
 
             current_ee_pos = self.data.site(self.ee_site_id).xpos.copy()
-
-            iters += 1
-            self.current_timestep += 1
 
         observation = self._get_obs()
         reward = 0
@@ -259,7 +242,11 @@ class PickPlacePandaEnvController(MujocoEnv):
         return observation, reward, False, False, info
 
 def main():
-    #env = PickPlaceSO101Env("scene.xml", render_mode="human")
+    env = PickPlacePandaEnvController(
+        "C:\\Users\\gdev\\Documents\\CS\\DL\\projects\\Robotics\\custom_gym_env\\robots/franka_emika_panda/pick_place_custom.xml",
+        render_mode="human")
+
+    """
     env = PickPlacePandaEnv(
         "C:\\Users\\gdev\\Documents\\CS\\DL\\projects\\Robotics\\custom_gym_env\\robots/franka_emika_panda/pick_place_custom.xml",
         render_mode="rgb_array", camera_name='fixed_cam')
@@ -283,6 +270,7 @@ def main():
             break
 
         steps += 1
+    """
 
 if __name__ == "__main__":
     main()
