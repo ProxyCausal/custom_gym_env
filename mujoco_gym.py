@@ -169,37 +169,32 @@ class PickPlacePandaEnvController(MujocoEnv):
         gripper_state = np.clip(gripper_state, 0, 1)
 
         return self.data.site(self.ee_site_id).xpos.copy(), site_euler, np.array([gripper_state])
-
-    def step(self, action):
-        delta_xyz = action[0:3]
-        delta_ori = action[3:6]
-        gripper_delta = action[6]
-        
-        #technically need to convert extrinsic Euler angles rel to base deltas into quarternion deltas
-        #but gpt says it's ok if the deltas are small
-        
-        #delta = diff b/w desired - current pos = actions = errors for xyz, but not angles?
-        
-        #action is ctrl- for gripper state this != joint angles
-        #seems to be b/w 0-1 measuring how CLOSED the gripper is (DROID dataset)
-        #but the actions are differentials even for gripper state
+    
+    def delta_to_target(self, delta):
+        #input actions here before step targets
+        delta_xyz = delta[0:3]
+        delta_ori = delta[3:6] #currently ignore orientation
+        delta_gripper = delta[6]
 
         current_ee_pos = self.data.site(self.ee_site_id).xpos.copy()
-        desired_ee_pos = current_ee_pos + delta_xyz
-
-        print("Desired ee pos:", desired_ee_pos)
-
-        #assumes the mj_steps from cartesian will be enough
-        #and actuates simultaneously rather than one before the other
-        #better to do a seperate check for gripper convergence
         gripper_ctrlrange = self.model.actuator_ctrlrange[-1,:]
         #255 = max close, 0 = max open
         # a_grip ∈ [-1, 1]
         # +a_grip = close, -a_grip = open
-        gripper_delta_ctrl = (gripper_ctrlrange[1] - gripper_ctrlrange[0]) * gripper_delta + gripper_ctrlrange[0]
+        gripper_delta_ctrl = (gripper_ctrlrange[1] - gripper_ctrlrange[0]) * delta_gripper + gripper_ctrlrange[0]
         gripper_ctrl = self.data.ctrl.copy()[self.model.actuator('fingers_actuator').id] + gripper_delta_ctrl
+
+        target = np.empty(7)
+        target[0:3] = current_ee_pos + delta_xyz
+        target[6] = np.clip(gripper_ctrl, *gripper_ctrlrange)
+
+        return target
+
+    def step(self, target):
+        target_xyz = target[0:3]
+        target_gripper = target[6]
         
-        self.data.ctrl[self.model.actuator('fingers_actuator').id] = np.clip(gripper_ctrl, *gripper_ctrlrange)
+        self.data.ctrl[self.model.actuator('fingers_actuator').id] = target_gripper
 
         #controller- should really create another class
         #adds up dq until target is achieved
@@ -210,13 +205,11 @@ class PickPlacePandaEnvController(MujocoEnv):
                 self.frames.append(frame)
 
             if (self.controller == 'osc'):
-                tau = osc(self.model, self.data, desired_ee_pos, 'home')
+                tau = osc(self.model, self.data, target_xyz, 'home')
                 self.data.ctrl[self.actuator_ids] = tau[self.actuator_ids]
 
             #sim only advances during controller loop, so it's not running during long inference times
             mujoco.mj_step(self.model, self.data)
-
-            current_ee_pos = self.data.site(self.ee_site_id).xpos.copy()
 
         observation = self._get_obs()
         reward = 0
@@ -245,32 +238,6 @@ def main():
     env = PickPlacePandaEnvController(
         "C:\\Users\\gdev\\Documents\\CS\\DL\\projects\\Robotics\\custom_gym_env\\robots/franka_emika_panda/pick_place_custom.xml",
         render_mode="human")
-
-    """
-    env = PickPlacePandaEnv(
-        "C:\\Users\\gdev\\Documents\\CS\\DL\\projects\\Robotics\\custom_gym_env\\robots/franka_emika_panda/pick_place_custom.xml",
-        render_mode="rgb_array", camera_name='fixed_cam')
-
-    #print(f"Action space {env.action_space}")
-
-    obs, info = env.reset()
-    print(obs)
-    steps = 0
-    while True:
-        action = env.action_space.sample()               # your control logic here
-        #action_xyz = VJEPA(obs)
-        #action = IK(action_xyz)
-        obs, reward, terminated, truncated, info = env.step(action)
-
-        if steps == 500:
-            from PIL import Image
-            #Image.fromarray(env.render()).save("fixed_cam.png")
-
-        if terminated or truncated:
-            break
-
-        steps += 1
-    """
 
 if __name__ == "__main__":
     main()

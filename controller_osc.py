@@ -2,7 +2,7 @@ import mujoco
 import numpy as np
 
 # Cartesian impedance control gains.
-impedance_pos = np.asarray([100.0, 100.0, 100.0])  # [N/m]
+impedance_pos = np.asarray([350.0, 350.0, 350.0])  # [N/m]
 impedance_ori = np.asarray([50.0, 50.0, 50.0])  # [Nm/rad]
 
 # Joint impedance control gains.
