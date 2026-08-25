@@ -12,81 +12,6 @@ from scipy.spatial.transform import Rotation as R
 #from controller_diffik import diffik_nullspace
 from controller_osc import osc
 
-class PickPlacePandaEnv(MujocoEnv):
-    def __init__(
-        self,
-        xml_file: str = "scene.xml",
-        frame_skip: int = 5,
-        default_camera_config: dict[str, float | int] = None, #DEFAULT_CAMERA_CONFIG
-        **kwargs
-    ):
-        #action space is set automatically by MujocoEnv
-        #6 from robot, 7 from free joint (3 xyz, 4 quat)
-        #is this correct for panda?
-        #observation_space = Box(low=-np.inf, high=np.inf, shape=(13,), dtype=np.float64)
-
-        observation_space = spaces.Tuple((
-            spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),   # ee_pos
-            spaces.Box(low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32),   # ee_euler
-            spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)  # gripper qpos
-        ))
-
-        MujocoEnv.__init__(
-            self,
-            xml_file,
-            frame_skip,
-            observation_space=observation_space,
-            default_camera_config=default_camera_config,
-            **kwargs,
-        )
-
-    def reset_model(self):
-        key_id = self.model.key('home').id
-
-        mujoco.mj_resetDataKeyframe(self.model, self.data, key_id)
-
-        mujoco.mj_forward(self.model, self.data)
-
-        return self._get_obs()
-
-    def step(self, action):
-        self.do_simulation(action, self.frame_skip)
-
-        observation = self._get_obs()
-        reward = 0
-        info = None
-
-        if self.render_mode == "human":
-            self.render()
-
-        # Get geom ID for the cube
-        box_id = mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "box")
-
-        # World position of the cube
-        box_pos = self.data.xpos[box_id]
-
-        # z-coordinate = height above origin
-        box_height = box_pos[2]
-
-        if box_height > 0.2:
-            return observation, 1, True, False, info
-
-        #not sure if this is true if not using make (registered envs)
-        # truncation=False as the time limit is handled by the `TimeLimit` wrapper added during `make`
-        return observation, reward, False, False, info
-    
-    def _get_obs(self):
-        #only valid since in this case panda robot base frame = world frame
-        #o.w. need to go from world -> base first
-        # 3x3 rotation matrix
-        Rmat = self.data.site(self.ee_site_id).xmat.reshape(3, 3)
-        # Convert to Euler angles
-        site_euler = R.from_matrix(Rmat).as_euler("xyz", degrees=True)
-
-        return self.data.site(self.ee_site_id).xpos.copy(), site_euler, np.array([self.data.qpos[7]])
-
-        #return self.data.qpos
-
 class PickPlacePandaEnvController(MujocoEnv):
     def __init__(
         self,
@@ -123,6 +48,7 @@ class PickPlacePandaEnvController(MujocoEnv):
         self.initial_pose = initial_pose
         self.control_timestep = 1 / control_freq
         fps = 30
+        #steps / frame = seconds / frame * steps / second
         self.steps_per_frame = int(1 / (fps * self.model.opt.timestep))
         self.current_timestep = 0
         self.frames = []
@@ -158,7 +84,7 @@ class PickPlacePandaEnvController(MujocoEnv):
         # 3x3 rotation matrix
         Rmat = self.data.site(self.ee_site_id).xmat.reshape(3, 3)
         # Convert to Euler angles
-        site_euler = R.from_matrix(Rmat).as_euler("xyz", degrees=True)
+        site_euler = R.from_matrix(Rmat).as_euler("xyz", degrees=True) #degrees=False
 
         pL = self.data.site_xpos[self.model.site("left_tip").id]
         pR = self.data.site_xpos[self.model.site("right_tip").id]
@@ -171,7 +97,8 @@ class PickPlacePandaEnvController(MujocoEnv):
         return self.data.site(self.ee_site_id).xpos.copy(), site_euler, np.array([gripper_state])
     
     def delta_to_target(self, delta):
-        #input actions here before step targets
+        #converts action delta to a fixed target to step
+        #target will be kept fixed for the action repeat for both pose and gripper
         delta_xyz = delta[0:3]
         delta_ori = delta[3:6] #currently ignore orientation
         delta_gripper = delta[6]
@@ -198,9 +125,8 @@ class PickPlacePandaEnvController(MujocoEnv):
 
         #controller- should really create another class
         #adds up dq until target is achieved
-        #print("desired ee_pos", int(self.control_timestep / self.model.opt.timestep))
         for i in range(int(self.control_timestep / self.model.opt.timestep)):
-            if (i % self.steps_per_frame) == 0:
+            if (self.current_timestep % self.steps_per_frame) == 0:
                 frame = self.render()
                 self.frames.append(frame)
 
@@ -210,6 +136,7 @@ class PickPlacePandaEnvController(MujocoEnv):
 
             #sim only advances during controller loop, so it's not running during long inference times
             mujoco.mj_step(self.model, self.data)
+            self.current_timestep += 1
 
         observation = self._get_obs()
         reward = 0
